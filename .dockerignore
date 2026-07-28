@@ -1,0 +1,31 @@
+# Игнорируем виртуальное окружение (оно создается внутри образа)
+.venv/
+venv/
+env/
+
+# Игнорируем кэш питона
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Игнорируем гитовую историю (она весит много и не нужна в рантайме)
+.git/
+.gitignore
+
+# Игнорируем локальные конфиги и секреты
+.env
+*.log
+
+# Игнорируем папки тестов и IDE
+.pytest_cache/
+.vscode/
+.idea/
+.mypy_cache/
+.ruff_cache/
+.pre-commit-config.yaml
+.roomodes
+CLAUDE.md
+README.md
+setup-tests.cfg
+setup.cfg

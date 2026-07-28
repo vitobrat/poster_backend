@@ -1,0 +1,74 @@
+repos:
+  - repo: local
+    hooks:
+    - id: flake8
+      name: flake8
+      description: wemake-python-styleguide enforcement
+      entry: flake8
+      additional_dependencies: [wemake-python-styleguide>=0.19.0]
+      args: ["--config=setup.cfg"]
+      language: python
+      types: [python]
+      files: ^src/
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-json
+      - id: check-toml
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: debug-statements
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: requirements-txt-fixer
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.8
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.0
+    hooks:
+    - id: mypy
+      additional_dependencies: [types-PyYAML>=6.0.12.12, types-redis]
+      args: [--config-file=setup.cfg]
+      files: ^src/
+
+  - repo: https://github.com/pycqa/isort
+    rev: 8.0.1
+    hooks:
+      - id: isort
+
+  - repo: https://github.com/psf/black
+    rev: 26.3.1
+    hooks:
+      - id: black
+        args: ["--line-length=120"]
+
+  - repo: https://github.com/asottile/add-trailing-comma
+    rev: v4.0.0
+    hooks:
+      - id: add-trailing-comma
+
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 1.0.0
+    hooks:
+      - id: mdformat
+        exclude: ^src/domains/.*/infrastructure/prompt/.*_output_example\.md$
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+      - id: nbstripout
+
+  - repo: local
+    hooks:
+      - id: hadolint
+        name: Lint Dockerfiles
+        entry: hadolint/hadolint:v2.12.0 hadolint
+        language: docker_image
+        types: [dockerfile]
