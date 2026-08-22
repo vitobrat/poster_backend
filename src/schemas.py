@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.models import BookingStatus, SeatStatus
+from src.infrastructure.database.models import BookingStatus, SeatStatus
 
 
 class LocationRead(BaseModel):
