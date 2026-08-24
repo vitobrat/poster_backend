@@ -6,6 +6,22 @@ PROTECTION_API_URL = "http://localhost:9002"
 BOOKING_TTL_MINUTES = 15
 
 
+class PaymentAPIServiceConfig(BaseModel):
+    base_url: str = PAYMENT_API_URL
+    timeout: float = 5.0
+    rate_limit_requests_count: int = 6
+    rate_limit_interval_in_seconds: float = 1.0
+    retry_attempts: int = 5
+
+
+class ProtectionAPIServiceConfig(BaseModel):
+    base_url: str = PROTECTION_API_URL
+    timeout: float = 2.9
+    rate_limit_requests_count: int = 6
+    rate_limit_interval_in_seconds: float = 1.0
+    retry_attempts: int = 3
+
+
 class AppConfig(BaseModel):
     host: str
     port: int

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from src.config import BOOKING_TTL_MINUTES
+from src.configs.config import BOOKING_TTL_MINUTES
 from src.domain.checkout.exceptions import (
     DuplicateSeatIdsError,
     SeatsNotFoundError,

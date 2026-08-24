@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config import Settings
+from src.configs.config import Settings
 from src.infrastructure.database.base_client import DatabaseClient
 from src.infrastructure.database.models import Event, EventSeat, Location, Seat
 from src.infrastructure.postgres.client import PostgresClient

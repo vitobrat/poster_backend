@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from src.config import BOOKING_TTL_MINUTES, Settings
+from src.configs.config import BOOKING_TTL_MINUTES, Settings
 from src.domain.checkout.exceptions import SeatsUnavailableError
 from src.infrastructure.database.models import (
     Booking,

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from src.config import PostgresConfig
+from src.configs.config import PostgresConfig
 from src.infrastructure.database.db_manager import DatabaseManager
 
 
