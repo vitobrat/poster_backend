@@ -15,7 +15,7 @@ from src.infrastructure.api_connectors.external.payment_service.dto import (
     PaymentCalculationRequestPayload,
 )
 from src.infrastructure.api_connectors.external.payment_service.exceptions import (
-    PaymentServiceError,
+    PaymentExternalAPIError,
 )
 from src.infrastructure.api_connectors.external.protection_service.client import (
     ProtectionHTTPConnector,
@@ -24,7 +24,7 @@ from src.infrastructure.api_connectors.external.protection_service.dto import (
     ProtectionCalculationRequestPayload,
 )
 from src.infrastructure.api_connectors.external.protection_service.exceptions import (
-    ProtectionServiceError,
+    ProtectionExternalAPIError,
 )
 
 RequestHandler = Callable[[httpx.Request], httpx.Response]
@@ -150,7 +150,7 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
 
         connector = self._build_payment_connector(handler)
 
-        with self.assertRaises(PaymentServiceError) as error_context:
+        with self.assertRaises(PaymentExternalAPIError) as error_context:
             await connector.payment_calculate(
                 PaymentCalculationRequestPayload(
                     booking_id=42,
@@ -281,7 +281,7 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
 
         connector = self._build_protection_connector(handler)
 
-        with self.assertRaises(ProtectionServiceError) as error_context:
+        with self.assertRaises(ProtectionExternalAPIError) as error_context:
             await connector.protection_calculate(
                 ProtectionCalculationRequestPayload(
                     booking_id=42,

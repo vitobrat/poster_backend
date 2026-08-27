@@ -1,9 +1,12 @@
 from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from src.infrastructure.database.models import EventSeat, SeatStatus
 from src.infrastructure.database.repository.base import BaseRepo
+from src.infrastructure.database.repository.exceptions import (
+    EventSeatsNotFoundException,
+)
 
 
 class EventSeatRepo(BaseRepo):
@@ -36,3 +39,23 @@ class EventSeatRepo(BaseRepo):
             seat.reserved_until = reserved_until
 
         await self.session.flush()
+
+    async def unreserve_event_seats(
+        self,
+        booking_id: int,
+    ) -> None:
+
+        query = (
+            update(EventSeat)
+            .where(EventSeat.booking_id == booking_id, EventSeat.status == SeatStatus.reserved)
+            .values(
+                status=SeatStatus.available,
+                booking_id=None,
+                reserved_until=None,
+            )
+        )
+
+        event_seats_update_response = await self.session.execute(query)
+
+        if event_seats_update_response.rowcount == 0:
+            raise EventSeatsNotFoundException

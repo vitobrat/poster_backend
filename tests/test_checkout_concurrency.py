@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 from datetime import UTC, datetime, timedelta
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from sqlalchemy import delete, select, text
@@ -11,8 +11,27 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from src.application.checkout.checkout_event import CheckoutEventService
 from src.configs.config import BOOKING_TTL_MINUTES, Settings
-from src.domain.checkout.exceptions import SeatsUnavailableError
+from src.domain.checkout.exceptions import (
+    DuplicateSeatIdsError,
+    EmptySeatIdsError,
+    EventNotFoundError,
+    SeatsNotFoundError,
+    SeatsUnavailableError,
+)
+from src.infrastructure.api_connectors.external.payment_service.client import (
+    PaymentHTTPConnector,
+)
+from src.infrastructure.api_connectors.external.payment_service.dto import (
+    PaymentCalculationResponse,
+)
+from src.infrastructure.api_connectors.external.protection_service.client import (
+    ProtectionHTTPConnector,
+)
+from src.infrastructure.api_connectors.external.protection_service.dto import (
+    ProtectionCalculationResponse,
+)
 from src.infrastructure.database.models import (
     Booking,
     Event,
@@ -23,7 +42,6 @@ from src.infrastructure.database.models import (
 )
 from src.infrastructure.database.repository.event_seats import EventSeatRepo
 from src.infrastructure.postgres.client import PostgresClient
-from src.services.checkout import CheckoutService
 
 
 class _LockCoordinator:
@@ -81,6 +99,28 @@ class _CoordinatedEventSeatRepo(EventSeatRepo):
 
 
 class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
+    def _build_checkout_service(self) -> CheckoutEventService:
+        payment_connector = AsyncMock(spec=PaymentHTTPConnector)
+        payment_connector.payment_calculate.return_value = PaymentCalculationResponse(
+            commission=300,
+            total=1_534,
+            payment_methods=["bank_card", "sbp"],
+            expires_at=None,
+        )
+        protection_connector = AsyncMock(spec=ProtectionHTTPConnector)
+        protection_connector.protection_calculate.return_value = ProtectionCalculationResponse(
+            available=True,
+            price=700,
+            covered_amount=1_234,
+            description="Full refund",
+        )
+
+        return CheckoutEventService(
+            db_client=self._db_client,
+            payment_api_connector=payment_connector,
+            protection_api_connector=protection_connector,
+        )
+
     async def asyncSetUp(self) -> None:
         settings = Settings()
         self._engine = create_async_engine(
@@ -139,6 +179,7 @@ class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             self._seat_id = seat.id
             self._event_id = event.id
             self._event_seat_id = event_seat.id
+            self._base_price = event.base_price
 
     async def asyncTearDown(self) -> None:
         try:
@@ -173,9 +214,9 @@ class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_only_one_checkout_reserves_a_locked_seat(self) -> None:
         coordinator = _LockCoordinator()
-        service = CheckoutService(self._db_client)
-        winner_task: asyncio.Task[Booking] | None = None
-        loser_task: asyncio.Task[Booking] | None = None
+        service = self._build_checkout_service()
+        winner_task: asyncio.Task[None] | None = None
+        loser_task: asyncio.Task[None] | None = None
 
         with patch(
             "src.infrastructure.database.db_manager.EventSeatRepo",
@@ -183,7 +224,7 @@ class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
         ):
             try:
                 winner_task = asyncio.create_task(
-                    service.checkout_booking(
+                    service.exec(
                         event_id=self._event_id,
                         user_id=101,
                         seat_ids=[self._seat_id],
@@ -195,7 +236,7 @@ class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
                 )
 
                 loser_task = asyncio.create_task(
-                    service.checkout_booking(
+                    service.exec(
                         event_id=self._event_id,
                         user_id=202,
                         seat_ids=[self._seat_id],
@@ -214,7 +255,7 @@ class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(loser_task.done())
 
                 coordinator.release_winner.set()
-                winner = await asyncio.wait_for(winner_task, timeout=5)
+                await asyncio.wait_for(winner_task, timeout=5)
 
                 with self.assertRaises(SeatsUnavailableError):
                     await asyncio.wait_for(loser_task, timeout=5)
@@ -242,14 +283,16 @@ class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
                 ),
             )
 
+        self.assertEqual(len(bookings), 1)
+        booking = bookings[0]
+
         self.assertIsNotNone(reserved_seat)
         self.assertEqual(reserved_seat.status, SeatStatus.reserved)
-        self.assertEqual(reserved_seat.booking_id, winner.id)
-        self.assertEqual(reserved_seat.reserved_until, winner.reserved_until)
-        self.assertEqual(len(bookings), 1)
-        self.assertEqual(bookings[0].user_id, 101)
+        self.assertEqual(reserved_seat.booking_id, booking.id)
+        self.assertEqual(reserved_seat.reserved_until, booking.reserved_until)
+        self.assertEqual(booking.user_id, 101)
 
-        seconds_left = (winner.reserved_until - datetime.now(UTC).replace(tzinfo=None)).total_seconds()
+        seconds_left = (booking.reserved_until - datetime.now(UTC).replace(tzinfo=None)).total_seconds()
         self.assertGreater(
             seconds_left,
             BOOKING_TTL_MINUTES * 60 - 10,
@@ -258,6 +301,56 @@ class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
             seconds_left,
             BOOKING_TTL_MINUTES * 60,
         )
+
+    async def test_checkout_preserves_expected_checkout_errors(self) -> None:
+        service = self._build_checkout_service()
+        with self.assertRaises(EmptySeatIdsError):
+            await service.exec(
+                event_id=self._event_id,
+                user_id=101,
+                seat_ids=[],
+            )
+
+        with self.assertRaises(DuplicateSeatIdsError):
+            await service.exec(
+                event_id=self._event_id,
+                user_id=101,
+                seat_ids=[self._seat_id, self._seat_id],
+            )
+
+        with self.assertRaises(EventNotFoundError):
+            await service.exec(
+                event_id=-1,
+                user_id=101,
+                seat_ids=[self._seat_id],
+            )
+
+        with self.assertRaises(SeatsNotFoundError):
+            await service.exec(
+                event_id=self._event_id,
+                user_id=101,
+                seat_ids=[-1],
+            )
+
+    async def test_checkout_saves_payment_and_protection_quotes(self) -> None:
+        service = self._build_checkout_service()
+        await service.exec(
+            event_id=self._event_id,
+            user_id=101,
+            seat_ids=[self._seat_id],
+        )
+
+        async with self._session_maker() as session:
+            booking = (
+                await session.scalars(
+                    select(Booking).where(Booking.event_id == self._event_id),
+                )
+            ).one()
+
+        self.assertEqual(booking.amount, self._base_price)
+        self.assertEqual(booking.payment_commission, 300)
+        self.assertEqual(booking.protection_price, 700)
+        self.assertFalse(booking.with_protection)
 
     async def _wait_until_backend_waits_on_lock(
         self,

@@ -6,7 +6,7 @@ from src.infrastructure.api_connectors.external.protection_service.dto import (
     ProtectionCalculationResponse,
 )
 from src.infrastructure.api_connectors.external.protection_service.exceptions import (
-    ProtectionServiceError,
+    ProtectionExternalAPIError,
 )
 
 
@@ -23,7 +23,7 @@ class ProtectionHTTPConnector(BaseHTTPConnector):
         try:
             protection_calculate_response.raise_for_status()
         except httpx.HTTPStatusError as http_error:
-            raise ProtectionServiceError from http_error
+            raise ProtectionExternalAPIError from http_error
 
         protection_calculate_response_data = protection_calculate_response.json()
 
