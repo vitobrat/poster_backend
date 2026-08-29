@@ -2,7 +2,8 @@ from datetime import datetime
 
 from sqlalchemy import select, update
 
-from src.infrastructure.database.models import EventSeat, SeatStatus
+from src.domain.enums import SeatStatus
+from src.infrastructure.database.models import EventSeat
 from src.infrastructure.database.repository.base import BaseRepo
 from src.infrastructure.database.repository.exceptions import (
     EventSeatsNotFoundException,

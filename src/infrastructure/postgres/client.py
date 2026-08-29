@@ -33,5 +33,5 @@ class PostgresClient:
         async with self._session_maker.begin() as session:
             yield DatabaseManager(session)
 
-    async def close(self) -> None:
+    async def aclose(self) -> None:
         await self._engine.dispose()

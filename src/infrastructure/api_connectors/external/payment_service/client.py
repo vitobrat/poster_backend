@@ -10,7 +10,7 @@ from src.infrastructure.api_connectors.external.payment_service.exceptions impor
 )
 
 
-class PaymentHTTPConnector(BaseHTTPConnector):
+class PaymentAPIHTTPConnector(BaseHTTPConnector):
 
     async def payment_calculate(self, payload: PaymentCalculationRequestPayload) -> PaymentCalculationResponse:
         payment_calculate_response = await self._request(

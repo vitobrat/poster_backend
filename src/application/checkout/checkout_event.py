@@ -25,9 +25,9 @@ from src.domain.checkout.exceptions import (
     SeatsNotFoundError,
     SeatsUnavailableError,
 )
-from src.domain.enums import Currency
+from src.domain.enums import Currency, SeatStatus
 from src.infrastructure.api_connectors.external.payment_service.client import (
-    PaymentHTTPConnector,
+    PaymentAPIHTTPConnector,
 )
 from src.infrastructure.api_connectors.external.payment_service.dto import (
     PaymentCalculationRequestPayload,
@@ -36,7 +36,7 @@ from src.infrastructure.api_connectors.external.payment_service.exceptions impor
     PaymentExternalAPIError,
 )
 from src.infrastructure.api_connectors.external.protection_service.client import (
-    ProtectionHTTPConnector,
+    ProtectionAPIHTTPConnector,
 )
 from src.infrastructure.api_connectors.external.protection_service.dto import (
     ProtectionCalculationRequestPayload,
@@ -45,7 +45,7 @@ from src.infrastructure.api_connectors.external.protection_service.exceptions im
     ProtectionExternalAPIError,
 )
 from src.infrastructure.database.base_client import DatabaseClient
-from src.infrastructure.database.models import Event, EventSeat, SeatStatus
+from src.infrastructure.database.models import Event, EventSeat
 from src.infrastructure.database.repository.exceptions import (
     BookingNotFoundException,
 )
@@ -56,14 +56,19 @@ class CheckoutEventService:
     def __init__(
         self,
         db_client: DatabaseClient,
-        payment_api_connector: PaymentHTTPConnector,
-        protection_api_connector: ProtectionHTTPConnector,
+        payment_api_connector: PaymentAPIHTTPConnector,
+        protection_api_connector: ProtectionAPIHTTPConnector,
     ) -> None:
         self._db_client = db_client
         self._payment_api_connector = payment_api_connector
         self._protection_api_connector = protection_api_connector
 
-    async def exec(self, event_id: int, user_id: int, seat_ids: list[int]) -> CheckoutResult:
+    async def exec(
+        self,
+        event_id: int,
+        user_id: int,
+        seat_ids: list[int],
+    ) -> CheckoutResult:
 
         try:
             booking_info = await self._reserve_empty_booking(

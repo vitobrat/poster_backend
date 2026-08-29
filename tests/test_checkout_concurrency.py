@@ -21,13 +21,13 @@ from src.domain.checkout.exceptions import (
     SeatsUnavailableError,
 )
 from src.infrastructure.api_connectors.external.payment_service.client import (
-    PaymentHTTPConnector,
+    PaymentAPIHTTPConnector,
 )
 from src.infrastructure.api_connectors.external.payment_service.dto import (
     PaymentCalculationResponse,
 )
 from src.infrastructure.api_connectors.external.protection_service.client import (
-    ProtectionHTTPConnector,
+    ProtectionAPIHTTPConnector,
 )
 from src.infrastructure.api_connectors.external.protection_service.dto import (
     ProtectionCalculationResponse,
@@ -100,14 +100,14 @@ class _CoordinatedEventSeatRepo(EventSeatRepo):
 
 class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
     def _build_checkout_service(self) -> CheckoutEventService:
-        payment_connector = AsyncMock(spec=PaymentHTTPConnector)
+        payment_connector = AsyncMock(spec=PaymentAPIHTTPConnector)
         payment_connector.payment_calculate.return_value = PaymentCalculationResponse(
             commission=300,
             total=1_534,
             payment_methods=["bank_card", "sbp"],
             expires_at=None,
         )
-        protection_connector = AsyncMock(spec=ProtectionHTTPConnector)
+        protection_connector = AsyncMock(spec=ProtectionAPIHTTPConnector)
         protection_connector.protection_calculate.return_value = ProtectionCalculationResponse(
             available=True,
             price=700,
@@ -208,7 +208,7 @@ class CheckoutConcurrencyTest(unittest.IsolatedAsyncioTestCase):
                     )
         finally:
             if hasattr(self, "_db_client"):
-                await self._db_client.close()
+                await self._db_client.aclose()
             if hasattr(self, "_engine"):
                 await self._engine.dispose()
 

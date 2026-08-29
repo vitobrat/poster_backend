@@ -2,7 +2,8 @@ from datetime import datetime
 
 from sqlalchemy import update
 
-from src.infrastructure.database.models import Booking, BookingStatus
+from src.domain.enums import BookingStatus
+from src.infrastructure.database.models import Booking
 from src.infrastructure.database.repository.base import BaseRepo
 from src.infrastructure.database.repository.exceptions import (
     BookingNotFoundException,

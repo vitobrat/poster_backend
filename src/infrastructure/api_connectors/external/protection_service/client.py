@@ -10,7 +10,7 @@ from src.infrastructure.api_connectors.external.protection_service.exceptions im
 )
 
 
-class ProtectionHTTPConnector(BaseHTTPConnector):
+class ProtectionAPIHTTPConnector(BaseHTTPConnector):
 
     async def protection_calculate(self, payload: ProtectionCalculationRequestPayload) -> ProtectionCalculationResponse:
         protection_calculate_response = await self._request(

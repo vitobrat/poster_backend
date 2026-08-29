@@ -44,7 +44,7 @@ class BaseHTTPConnector:
 
         self._max_retry_attempts = max_retry_attempts
 
-    async def close_client(self) -> None:
+    async def aclose_client(self) -> None:
         await self._api_client.aclose()
 
     async def _request(

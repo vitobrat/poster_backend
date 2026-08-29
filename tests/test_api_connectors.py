@@ -9,7 +9,7 @@ import httpx
 from src.infrastructure.api_connectors.base import BaseHTTPConnector
 from src.infrastructure.api_connectors.exceptions import HTTPConnectionError
 from src.infrastructure.api_connectors.external.payment_service.client import (
-    PaymentHTTPConnector,
+    PaymentAPIHTTPConnector,
 )
 from src.infrastructure.api_connectors.external.payment_service.dto import (
     PaymentCalculationRequestPayload,
@@ -18,7 +18,7 @@ from src.infrastructure.api_connectors.external.payment_service.exceptions impor
     PaymentExternalAPIError,
 )
 from src.infrastructure.api_connectors.external.protection_service.client import (
-    ProtectionHTTPConnector,
+    ProtectionAPIHTTPConnector,
 )
 from src.infrastructure.api_connectors.external.protection_service.dto import (
     ProtectionCalculationRequestPayload,
@@ -36,7 +36,7 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
         handler: RequestHandler,
         *,
         max_retry_attempts: int = 3,
-    ) -> PaymentHTTPConnector:
+    ) -> PaymentAPIHTTPConnector:
         api_client = httpx.AsyncClient(
             base_url="https://payment.test",
             transport=httpx.MockTransport(handler),
@@ -45,14 +45,14 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
             "src.infrastructure.api_connectors.base.httpx.AsyncClient",
             return_value=api_client,
         ):
-            connector = PaymentHTTPConnector(
+            connector = PaymentAPIHTTPConnector(
                 base_url="https://payment.test",
                 timeout=1.0,
                 max_retry_attempts=max_retry_attempts,
             )
 
         connector._rate_limiter = None
-        self.addAsyncCleanup(connector.close_client)
+        self.addAsyncCleanup(connector.aclose_client)
         return connector
 
     def _build_protection_connector(
@@ -60,7 +60,7 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
         handler: RequestHandler,
         *,
         max_retry_attempts: int = 3,
-    ) -> ProtectionHTTPConnector:
+    ) -> ProtectionAPIHTTPConnector:
         api_client = httpx.AsyncClient(
             base_url="https://protection.test",
             transport=httpx.MockTransport(handler),
@@ -69,14 +69,14 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
             "src.infrastructure.api_connectors.base.httpx.AsyncClient",
             return_value=api_client,
         ):
-            connector = ProtectionHTTPConnector(
+            connector = ProtectionAPIHTTPConnector(
                 base_url="https://protection.test",
                 timeout=1.0,
                 max_retry_attempts=max_retry_attempts,
             )
 
         connector._rate_limiter = None
-        self.addAsyncCleanup(connector.close_client)
+        self.addAsyncCleanup(connector.aclose_client)
         return connector
 
     @staticmethod
@@ -329,17 +329,17 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
                 timeout=1.0,
             )
 
-        self.addAsyncCleanup(connector.close_client)
+        self.addAsyncCleanup(connector.aclose_client)
 
         response = await connector._request("GET", "/health")
 
         self.assertEqual(response.status_code, 204)
 
-    async def test_close_client_closes_connection_pool(self) -> None:
+    async def test_aclose_client_closes_connection_pool(self) -> None:
         connector = self._build_payment_connector(self._payment_response)
 
         self.assertFalse(connector._api_client.is_closed)
 
-        await connector.close_client()
+        await connector.aclose_client()
 
         self.assertTrue(connector._api_client.is_closed)

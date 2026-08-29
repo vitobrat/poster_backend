@@ -1,4 +1,3 @@
-import enum
 from datetime import datetime
 
 from sqlalchemy import DateTime
@@ -6,22 +5,11 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from src.domain.enums import BookingStatus, SeatStatus
+
 
 class Base(DeclarativeBase):
-    pass  # noqa: WPS420 WPS604
-
-
-class SeatStatus(str, enum.Enum):
-    available = "available"
-    reserved = "reserved"
-    sold = "sold"
-
-
-class BookingStatus(str, enum.Enum):
-    pending_payment = "pending_payment"
-    paid = "paid"
-    cancelled = "cancelled"
-    expired = "expired"
+    """Базовый класс модели, нужен для sqlalchemy"""
 
 
 class Location(Base):

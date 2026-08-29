@@ -1,4 +1,4 @@
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PAYMENT_API_URL = "http://localhost:9001"
@@ -11,7 +11,7 @@ class PaymentAPIServiceConfig(BaseModel):
     timeout: float = 5.0
     rate_limit_requests_count: int = 6
     rate_limit_interval_in_seconds: float = 1.0
-    retry_attempts: int = 5
+    max_retry_attempts: int = 5
 
 
 class ProtectionAPIServiceConfig(BaseModel):
@@ -19,10 +19,19 @@ class ProtectionAPIServiceConfig(BaseModel):
     timeout: float = 2.9
     rate_limit_requests_count: int = 6
     rate_limit_interval_in_seconds: float = 1.0
-    retry_attempts: int = 3
+    max_retry_attempts: int = 3
 
 
-class AppConfig(BaseModel):
+class APIConnectorsConfigs(BaseModel):
+    payment_api_connector: PaymentAPIServiceConfig = Field(
+        default_factory=PaymentAPIServiceConfig,
+    )
+    protection_api_connector: ProtectionAPIServiceConfig = Field(
+        default_factory=ProtectionAPIServiceConfig,
+    )
+
+
+class UvicornConfig(BaseModel):
     host: str
     port: int
     reload: bool
@@ -64,9 +73,12 @@ class RedisConfig(BaseModel):
 
 
 class Settings(BaseSettings):
-    app: AppConfig
+    app: UvicornConfig
     postgres: PostgresConfig
     redis: RedisConfig
+    api_connectors: APIConnectorsConfigs = Field(
+        default_factory=APIConnectorsConfigs,
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",
