@@ -45,7 +45,7 @@ from src.infrastructure.api_connectors.external.protection_service.exceptions im
     ProtectionExternalAPIError,
 )
 from src.infrastructure.database.base_client import DatabaseClient
-from src.infrastructure.database.models import Event, EventSeat
+from src.infrastructure.database.models import Booking, Event, EventSeat
 from src.infrastructure.database.repository.exceptions import (
     BookingNotFoundException,
 )
@@ -71,7 +71,7 @@ class CheckoutEventService:
     ) -> CheckoutResult:
 
         try:
-            booking_info = await self._reserve_empty_booking(
+            booking_info = await self._reserve_booking(
                 event_id=event_id,
                 user_id=user_id,
                 seat_ids=seat_ids,
@@ -159,17 +159,54 @@ class CheckoutEventService:
         except BookingNotFoundException as booking_not_found_exception:
             raise CheckoutCompensationError from booking_not_found_exception
 
-    async def _reserve_empty_booking(self, event_id: int, user_id: int, seat_ids: list[int]) -> ReservedBooking:
+    async def _reserve_booking(self, event_id: int, user_id: int, seat_ids: list[int]) -> ReservedBooking:
         self._ensure_requested_seat_ids_valid(seat_ids)
+
+        async with asyncio.TaskGroup() as tg:
+            task_reserve_empty_booking = tg.create_task(
+                self._reserve_empty_booking(
+                    event_id,
+                    user_id,
+                    seat_ids,
+                ),
+            )
+            task_get_retrieved_event = tg.create_task(self._get_retrieved_event(event_id))
+
+        booking, retrieved_event_seats = task_reserve_empty_booking.result()
+        retrieved_event = task_get_retrieved_event.result()
+
+        return ReservedBooking(
+            booking_id=booking.id,
+            amount=booking.amount,
+            event_title=retrieved_event.title,
+            event_category=retrieved_event.category,
+            event_starts_at=retrieved_event.starts_at,
+            reserved_until=booking.reserved_until,
+            seats=tuple(
+                ReservedSeat(seat_id=event_seat.seat_id, price=event_seat.price) for event_seat in retrieved_event_seats
+            ),
+        )
+
+    async def _get_retrieved_event(
+        self,
+        event_id: int,
+    ) -> Event:
+
+        async with self._db_client.transaction() as db_manager:
+            return self._ensure_event_exists(
+                await db_manager.event_repo.get_by_id(event_id),
+            )
+
+    async def _reserve_empty_booking(
+        self,
+        event_id: int,
+        user_id: int,
+        seat_ids: list[int],
+    ) -> tuple[Booking, list[EventSeat]]:
 
         async with self._db_client.transaction() as db_manager:
 
-            # TODO: Отправить два запроса для retrieved_event_seats и event
-            # конкурентно в базу данных, потому что они независимые
             retrieved_event_seats = await db_manager.event_seats_repo.get_event_seats_for_update(event_id, seat_ids)
-            event = self._ensure_event_exists(
-                await db_manager.event_repo.get_by_id(event_id),
-            )
 
             current_time = datetime.now(UTC).replace(tzinfo=None)
             booking_compensation_ids = self._ensure_seats_available(retrieved_event_seats, seat_ids, current_time)
@@ -189,17 +226,7 @@ class CheckoutEventService:
                 reserved_until=booking.reserved_until,
             )
 
-        return ReservedBooking(
-            booking_id=booking.id,
-            amount=booking.amount,
-            event_title=event.title,
-            event_category=event.category,
-            event_starts_at=event.starts_at,
-            reserved_until=booking.reserved_until,
-            seats=tuple(
-                ReservedSeat(seat_id=event_seat.seat_id, price=event_seat.price) for event_seat in retrieved_event_seats
-            ),
-        )
+        return booking, retrieved_event_seats
 
     async def _update_booking_payment_info(
         self,
