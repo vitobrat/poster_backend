@@ -1,22 +1,25 @@
-class CheckoutError(Exception):
+from src.domain.exceptions import DomainError
+
+
+class CheckoutDomainError(DomainError):
     """Базовая ошибка checkout."""
 
 
-class EmptySeatIdsError(CheckoutError):
+class EmptySeatIdsError(CheckoutDomainError):
     """No seat identifiers were requested."""
 
 
-class DuplicateSeatIdsError(CheckoutError):
+class DuplicateSeatIdsError(CheckoutDomainError):
     """Запрошенные идентификаторы мест содержат дубликаты."""
 
 
-class EventNotFoundError(CheckoutError):
+class EventNotFoundError(CheckoutDomainError):
     """The requested event does not exist."""
 
 
-class SeatsNotFoundError(CheckoutError):
+class SeatsNotFoundError(CheckoutDomainError):
     """Часть запрошенных мест не найдена для мероприятия."""
 
 
-class SeatsUnavailableError(CheckoutError):
+class SeatsUnavailableError(CheckoutDomainError):
     """Хотя бы одно из запрошенных мест недоступно для бронирования."""

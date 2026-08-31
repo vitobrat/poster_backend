@@ -18,7 +18,7 @@ from src.application.checkout.exceptions import (
 )
 from src.configs.config import BOOKING_TTL_MINUTES
 from src.domain.checkout.exceptions import (
-    CheckoutError,
+    CheckoutDomainError,
     DuplicateSeatIdsError,
     EmptySeatIdsError,
     EventNotFoundError,
@@ -76,7 +76,7 @@ class CheckoutEventService:
                 user_id=user_id,
                 seat_ids=seat_ids,
             )
-        except CheckoutError:
+        except CheckoutDomainError:
             raise
         except Exception as exception:
             raise BookingReservedError from exception
@@ -105,7 +105,7 @@ class CheckoutEventService:
             await self.checkout_compensation(
                 booking_id=booking_info.booking_id,
             )
-            raise CheckoutError from payment_calculating_exception
+            raise CheckoutDomainError from payment_calculating_exception
 
         payment: PaymentQuote = payment_task.result()
         protection: ProtectionQuote | None = protection_task.result()

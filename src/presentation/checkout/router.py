@@ -2,6 +2,7 @@ from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter
 
 from src.application.checkout.service import CheckoutService
+from src.presentation.checkout import mapper
 from src.presentation.checkout.dto import CheckoutRequest, CheckoutResponse
 from src.presentation.dependencies import CurrentUserId
 
@@ -18,6 +19,10 @@ async def prepare_checkout(
 ) -> CheckoutResponse:
     """Временно бронирует места за клиентом, возвращает итоговую стоимость
     и возможность страховки."""
-    # TODO: создать бронь для выбранных мест через SELECT FOR UPDATE, и посчитать базовую стоимость.
-    # TODO: конкурентно запросить Payment API и Protection API для расчета checkout.
-    raise NotImplementedError
+    checkout_result = await checkout_service.checkout_event_for_booking_use_case(
+        event_id=event_id,
+        user_id=user_id,
+        seat_ids=payload.seat_ids,
+    )
+
+    return mapper.to_checkout_response(checkout_result)

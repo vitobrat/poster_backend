@@ -6,6 +6,7 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from presentation.exceptions import setup_domain_exception_errors
 from src.add_event_data import add_event_data_to_db
 from src.configs.config import Settings
 from src.ioc import create_container
@@ -47,3 +48,5 @@ setup_dishka(
     container=container,
     app=app,
 )
+
+setup_domain_exception_errors(app)
