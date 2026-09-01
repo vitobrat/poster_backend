@@ -5,10 +5,13 @@ description = ""
 requires-python = ">=3.13"
 dependencies = [
     "alembic==1.16.2",
+    "dishka>=1.10.1",
     "fastapi==0.116.1",
     "greenlet==3.2.3",
+    "httpx>=0.28.1",
     "pre-commit>=4.6.1",
     "psycopg[binary,pool]==3.2.9",
+    "pydantic-settings>=2.14.2",
     "reportlab>=5.0.0",
     "sqlalchemy==2.0.41",
     "uvicorn[standard]==0.35.0",

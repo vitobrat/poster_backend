@@ -22,7 +22,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from src.schemas import EventDashboard
+from src.presentation.events.dto import EventDashboard
 
 FONT_DIR: Final[Path] = Path(__file__).parent / "assets" / "fonts"
 REGULAR_FONT_PATH: Final[Path] = FONT_DIR / "FiraCode-Regular.ttf"
