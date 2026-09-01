@@ -6,10 +6,10 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from presentation.exceptions import setup_domain_exception_errors
 from src.add_event_data import add_event_data_to_db
 from src.configs.config import Settings
 from src.ioc import create_container
+from src.presentation.exceptions import setup_domain_exception_errors
 from src.presentation.router import router
 
 

@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.application.checkout.checkout_event import CheckoutEventService
 from src.configs.config import Settings
-from src.domain.checkout.exceptions import CheckoutError
+from src.domain.checkout.exceptions import CheckoutDomainError
+from src.infrastructure.api_connectors.exceptions import HTTPConnectionError
 from src.infrastructure.api_connectors.external.payment_service.client import (
     PaymentAPIHTTPConnector,
 )
@@ -128,19 +129,60 @@ class CheckoutCompensationTest(unittest.IsolatedAsyncioTestCase):
                 await self._engine.dispose()
 
     async def test_payment_error_expires_booking_and_releases_seat(self) -> None:
-        service = self._build_checkout_service(
+        await self._assert_payment_failure_compensates(
             payment_error=PaymentExternalAPIError("payment failed"),
         )
-        raised_exception: Exception | None = None
 
-        try:
+    async def test_payment_transport_error_expires_booking_and_releases_seat(
+        self,
+    ) -> None:
+        await self._assert_payment_failure_compensates(
+            payment_error=HTTPConnectionError("payment connection failed"),
+        )
+
+    async def test_unexpected_error_expires_booking_and_releases_seat(
+        self,
+    ) -> None:
+        service = self._build_checkout_service(
+            payment_error=RuntimeError("unexpected checkout failure"),
+        )
+
+        with self.assertRaises(Exception):
             await service.exec(
                 event_id=self._event_id,
                 user_id=101,
                 seat_ids=[self._seat_ids[0]],
             )
-        except Exception as exception:
-            raised_exception = exception
+
+        async with self._session_maker() as session:
+            booking = (
+                await session.scalars(
+                    select(Booking).where(Booking.event_id == self._event_id),
+                )
+            ).one()
+            event_seat = await session.get(
+                EventSeat,
+                self._event_seat_ids[0],
+            )
+
+        self.assertEqual(booking.status, BookingStatus.expired)
+        self.assertIsNotNone(event_seat)
+        self.assertEqual(event_seat.status, SeatStatus.available)
+        self.assertIsNone(event_seat.booking_id)
+        self.assertIsNone(event_seat.reserved_until)
+
+    async def _assert_payment_failure_compensates(
+        self,
+        payment_error: Exception,
+    ) -> None:
+        service = self._build_checkout_service(payment_error=payment_error)
+
+        with self.assertRaises(CheckoutDomainError) as error_context:
+            await service.exec(
+                event_id=self._event_id,
+                user_id=101,
+                seat_ids=[self._seat_ids[0]],
+            )
 
         async with self._session_maker() as session:
             booking = (
@@ -156,9 +198,7 @@ class CheckoutCompensationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(event_seat.booking_id)
         self.assertIsNone(event_seat.reserved_until)
 
-        self.assertIsNotNone(raised_exception)
-        self.assertIs(type(raised_exception), CheckoutError)
-        self.assertNotIsInstance(raised_exception, BaseExceptionGroup)
+        self.assertIs(type(error_context.exception), CheckoutDomainError)
 
     async def test_expired_booking_is_replaced_by_new_booking(self) -> None:
         expired_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=1)

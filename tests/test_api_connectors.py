@@ -1,3 +1,4 @@
+import asyncio
 import json
 import unittest
 from collections.abc import Callable
@@ -5,6 +6,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, call, patch
 
 import httpx
+from pydantic import ValidationError
 
 from src.infrastructure.api_connectors.base import BaseHTTPConnector
 from src.infrastructure.api_connectors.exceptions import HTTPConnectionError
@@ -26,6 +28,7 @@ from src.infrastructure.api_connectors.external.protection_service.dto import (
 from src.infrastructure.api_connectors.external.protection_service.exceptions import (
     ProtectionExternalAPIError,
 )
+from src.infrastructure.api_connectors.schemas import HttpRateLimit
 
 RequestHandler = Callable[[httpx.Request], httpx.Response]
 
@@ -92,7 +95,9 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
             },
         )
 
-    async def test_payment_calculate_serializes_request_and_validates_response(self) -> None:
+    async def test_payment_calculate_serializes_request_and_validates_response(
+        self,
+    ) -> None:
         requests: list[httpx.Request] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -161,6 +166,62 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(error_context.exception.__cause__, httpx.HTTPStatusError)
 
+    async def test_payment_wraps_invalid_json_response(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                status_code=200,
+                request=request,
+                content=b"not-json",
+                headers={"content-type": "application/json"},
+            )
+
+        connector = self._build_payment_connector(handler)
+
+        with self.assertRaises(PaymentExternalAPIError) as error_context:
+            await connector.payment_calculate(
+                PaymentCalculationRequestPayload(
+                    booking_id=42,
+                    amount=10_000,
+                    currency="RUB",
+                ),
+            )
+
+        self.assertIsInstance(
+            error_context.exception.__cause__,
+            json.JSONDecodeError,
+        )
+
+    async def test_payment_wraps_response_schema_validation_error(
+        self,
+    ) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                status_code=200,
+                request=request,
+                json={
+                    "commission": "invalid",
+                    "total": 10_300,
+                    "payment_methods": ["bank_card"],
+                    "expires_at": None,
+                },
+            )
+
+        connector = self._build_payment_connector(handler)
+
+        with self.assertRaises(PaymentExternalAPIError) as error_context:
+            await connector.payment_calculate(
+                PaymentCalculationRequestPayload(
+                    booking_id=42,
+                    amount=10_000,
+                    currency="RUB",
+                ),
+            )
+
+        self.assertIsInstance(
+            error_context.exception.__cause__,
+            ValidationError,
+        )
+
     async def test_payment_retries_transport_error_and_returns_success(self) -> None:
         attempts = 0
 
@@ -204,7 +265,9 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(error_context.exception.__cause__, httpx.ConnectError)
 
-    async def test_protection_calculate_serializes_datetime_and_validates_response(self) -> None:
+    async def test_protection_calculate_serializes_datetime_and_validates_response(
+        self,
+    ) -> None:
         requests: list[httpx.Request] = []
         event_starts_at = datetime(2026, 8, 25, 15, 30, tzinfo=UTC)
 
@@ -293,6 +356,45 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsInstance(error_context.exception.__cause__, httpx.HTTPStatusError)
 
+    async def test_protection_wraps_response_schema_validation_error(
+        self,
+    ) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                status_code=200,
+                request=request,
+                json={
+                    "available": True,
+                    "price": "invalid",
+                    "covered_amount": 10_000,
+                    "description": "Full refund",
+                },
+            )
+
+        connector = self._build_protection_connector(handler)
+
+        with self.assertRaises(ProtectionExternalAPIError) as error_context:
+            await connector.protection_calculate(
+                ProtectionCalculationRequestPayload(
+                    booking_id=42,
+                    ticket_amount=10_000,
+                    event_category="concert",
+                    event_starts_at=datetime(
+                        2026,
+                        8,
+                        25,
+                        15,
+                        30,
+                        tzinfo=UTC,
+                    ),
+                ),
+            )
+
+        self.assertIsInstance(
+            error_context.exception.__cause__,
+            ValidationError,
+        )
+
     async def test_protection_wraps_exhausted_transport_error(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
             raise httpx.ReadTimeout("read timed out", request=request)
@@ -334,6 +436,64 @@ class APIConnectorTests(unittest.IsolatedAsyncioTestCase):
         response = await connector._request("GET", "/health")
 
         self.assertEqual(response.status_code, 204)
+
+    async def test_rate_limiter_blocks_request_over_configured_quota(self) -> None:
+        connector = BaseHTTPConnector(
+            base_url="https://external.test",
+            timeout=1.0,
+            rate_limit_config=HttpRateLimit(
+                rate_limit_requests_count=2,
+                rate_limit_interval_in_seconds=60,
+            ),
+        )
+        self.addAsyncCleanup(connector.aclose_client)
+        connector._api_client.request = AsyncMock(
+            return_value=httpx.Response(status_code=204),
+        )
+        release_permits = asyncio.Event()
+
+        async def controlled_release(rate_limiter: asyncio.Semaphore) -> None:
+            await release_permits.wait()
+            rate_limiter.release()
+
+        with patch.object(
+            connector,
+            "_release_rate_limiter",
+            new=controlled_release,
+        ):
+            requests = [asyncio.create_task(connector._request("GET", "/health")) for _ in range(3)]
+            await self._wait_for_await_count(
+                connector._api_client.request,
+                expected_count=2,
+            )
+
+            self.assertEqual(connector._api_client.request.await_count, 2)
+            self.assertFalse(requests[2].done())
+
+            release_permits.set()
+            responses = await asyncio.wait_for(
+                asyncio.gather(*requests),
+                timeout=1,
+            )
+
+        self.assertEqual(connector._api_client.request.await_count, 3)
+        self.assertEqual(
+            [response.status_code for response in responses],
+            [204, 204, 204],
+        )
+
+    async def _wait_for_await_count(
+        self,
+        async_mock: AsyncMock,
+        expected_count: int,
+    ) -> None:
+        for _ in range(100):
+            if async_mock.await_count == expected_count:
+                return
+            await asyncio.sleep(0)
+        self.fail(
+            "Requests did not acquire the expected rate-limit permits",
+        )
 
     async def test_aclose_client_closes_connection_pool(self) -> None:
         connector = self._build_payment_connector(self._payment_response)

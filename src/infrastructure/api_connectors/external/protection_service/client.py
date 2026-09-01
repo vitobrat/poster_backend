@@ -1,4 +1,7 @@
+import json
+
 import httpx
+from pydantic import ValidationError
 
 from src.infrastructure.api_connectors.base import BaseHTTPConnector
 from src.infrastructure.api_connectors.external.protection_service.dto import (
@@ -25,6 +28,18 @@ class ProtectionAPIHTTPConnector(BaseHTTPConnector):
         except httpx.HTTPStatusError as http_error:
             raise ProtectionExternalAPIError from http_error
 
-        protection_calculate_response_data = protection_calculate_response.json()
+        try:
+            return self._parse_protection_calculation_response(
+                protection_calculate_response,
+            )
+        except (json.JSONDecodeError, ValidationError) as error:
+            raise ProtectionExternalAPIError(
+                "Protection API returned an invalid response",
+            ) from error
 
-        return ProtectionCalculationResponse.model_validate(protection_calculate_response_data)
+    @staticmethod
+    def _parse_protection_calculation_response(
+        response: httpx.Response,
+    ) -> ProtectionCalculationResponse:
+        response_data = response.json()
+        return ProtectionCalculationResponse.model_validate(response_data)

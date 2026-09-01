@@ -1,4 +1,7 @@
+import json
+
 import httpx
+from pydantic import ValidationError
 
 from src.infrastructure.api_connectors.base import BaseHTTPConnector
 from src.infrastructure.api_connectors.external.payment_service.dto import (
@@ -25,6 +28,18 @@ class PaymentAPIHTTPConnector(BaseHTTPConnector):
         except httpx.HTTPStatusError as http_error:
             raise PaymentExternalAPIError from http_error
 
-        payment_calculate_response_data = payment_calculate_response.json()
+        try:
+            return self._parse_payment_calculation_response(
+                payment_calculate_response,
+            )
+        except (json.JSONDecodeError, ValidationError) as error:
+            raise PaymentExternalAPIError(
+                "Payment API returned an invalid response",
+            ) from error
 
-        return PaymentCalculationResponse.model_validate(payment_calculate_response_data)
+    @staticmethod
+    def _parse_payment_calculation_response(
+        response: httpx.Response,
+    ) -> PaymentCalculationResponse:
+        response_data = response.json()
+        return PaymentCalculationResponse.model_validate(response_data)

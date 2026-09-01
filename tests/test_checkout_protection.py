@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.application.checkout.checkout_event import CheckoutEventService
 from src.configs.config import Settings
+from src.infrastructure.api_connectors.exceptions import HTTPConnectionError
 from src.infrastructure.api_connectors.external.payment_service.client import (
     PaymentAPIHTTPConnector,
 )
@@ -154,6 +155,26 @@ class CheckoutProtectionTest(unittest.IsolatedAsyncioTestCase):
         service = self._build_checkout_service(
             protection_side_effect=ProtectionExternalAPIError(
                 "503 Service Unavailable",
+            ),
+        )
+
+        result = await service.exec(
+            event_id=self._event_id,
+            user_id=101,
+            seat_ids=[self._seat_id],
+        )
+        booking = await self._get_booking()
+
+        self.assertIsNone(result.protection)
+        self.assertEqual(result.payment.commission, 300)
+        self.assertEqual(result.payment.total, 1_534)
+        self.assertEqual(booking.payment_commission, 300)
+        self.assertIsNone(booking.protection_price)
+
+    async def test_protection_transport_error_does_not_break_checkout(self) -> None:
+        service = self._build_checkout_service(
+            protection_side_effect=HTTPConnectionError(
+                "protection connection failed",
             ),
         )
 

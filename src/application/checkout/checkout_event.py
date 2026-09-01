@@ -26,6 +26,7 @@ from src.domain.checkout.exceptions import (
     SeatsUnavailableError,
 )
 from src.domain.enums import Currency, SeatStatus
+from src.infrastructure.api_connectors.exceptions import HTTPConnectionError
 from src.infrastructure.api_connectors.external.payment_service.client import (
     PaymentAPIHTTPConnector,
 )
@@ -82,16 +83,39 @@ class CheckoutEventService:
             raise BookingReservedError from exception
 
         try:
+            return await self._complete_checkout(booking_info)
+        except Exception:
+            await self.checkout_compensation(
+                booking_id=booking_info.booking_id,
+            )
+            raise
 
-            async with asyncio.TaskGroup() as tg:
-                payment_task = tg.create_task(
+    async def checkout_compensation(
+        self,
+        booking_id: int,
+    ) -> None:
+
+        try:
+            async with self._db_client.transaction() as db_manager:
+                await db_manager.booking_repo.expire_booking(booking_id)
+                await db_manager.event_seats_repo.unreserve_event_seats(booking_id)
+        except BookingNotFoundException as booking_not_found_exception:
+            raise CheckoutCompensationError from booking_not_found_exception
+
+    async def _complete_checkout(
+        self,
+        booking_info: ReservedBooking,
+    ) -> CheckoutResult:
+        try:
+            async with asyncio.TaskGroup() as task_group:
+                payment_task = task_group.create_task(
                     self._calculate_payment(
                         booking_id=booking_info.booking_id,
                         amount=booking_info.amount,
                     ),
                     name="calculate_booking_payment",
                 )
-                protection_task = tg.create_task(
+                protection_task = task_group.create_task(
                     self._calculate_optional_protection(
                         booking_id=booking_info.booking_id,
                         amount=booking_info.amount,
@@ -100,12 +124,8 @@ class CheckoutEventService:
                     ),
                     name="calculate_optional_booking_protection_payment",
                 )
-
-        except* PaymentCalculationError as payment_calculating_exception:
-            await self.checkout_compensation(
-                booking_id=booking_info.booking_id,
-            )
-            raise CheckoutDomainError from payment_calculating_exception
+        except* PaymentCalculationError as error:
+            raise CheckoutDomainError from error
 
         payment: PaymentQuote = payment_task.result()
         protection: ProtectionQuote | None = protection_task.result()
@@ -117,9 +137,6 @@ class CheckoutEventService:
                 protection_price=protection.price if protection is not None and protection.available else None,
             )
         except BookingNotFoundException as booking_not_found_exception:
-            await self.checkout_compensation(
-                booking_id=booking_info.booking_id,
-            )
             raise BookingUpdatePaymentError from booking_not_found_exception
 
         return CheckoutResult(
@@ -147,33 +164,14 @@ class CheckoutEventService:
             seats=booking_info.seats,
         )
 
-    async def checkout_compensation(
-        self,
-        booking_id: int,
-    ) -> None:
-
-        try:
-            async with self._db_client.transaction() as db_manager:
-                await db_manager.booking_repo.expire_booking(booking_id)
-                await db_manager.event_seats_repo.unreserve_event_seats(booking_id)
-        except BookingNotFoundException as booking_not_found_exception:
-            raise CheckoutCompensationError from booking_not_found_exception
-
     async def _reserve_booking(self, event_id: int, user_id: int, seat_ids: list[int]) -> ReservedBooking:
         self._ensure_requested_seat_ids_valid(seat_ids)
 
-        async with asyncio.TaskGroup() as tg:
-            task_reserve_empty_booking = tg.create_task(
-                self._reserve_empty_booking(
-                    event_id,
-                    user_id,
-                    seat_ids,
-                ),
-            )
-            task_get_retrieved_event = tg.create_task(self._get_retrieved_event(event_id))
-
-        booking, retrieved_event_seats = task_reserve_empty_booking.result()
-        retrieved_event = task_get_retrieved_event.result()
+        booking, retrieved_event, retrieved_event_seats = await self._reserve_empty_booking(
+            event_id,
+            user_id,
+            seat_ids,
+        )
 
         return ReservedBooking(
             booking_id=booking.id,
@@ -187,24 +185,17 @@ class CheckoutEventService:
             ),
         )
 
-    async def _get_retrieved_event(
-        self,
-        event_id: int,
-    ) -> Event:
-
-        async with self._db_client.transaction() as db_manager:
-            return self._ensure_event_exists(
-                await db_manager.event_repo.get_by_id(event_id),
-            )
-
     async def _reserve_empty_booking(
         self,
         event_id: int,
         user_id: int,
         seat_ids: list[int],
-    ) -> tuple[Booking, list[EventSeat]]:
+    ) -> tuple[Booking, Event, list[EventSeat]]:
 
         async with self._db_client.transaction() as db_manager:
+            retrieved_event = self._ensure_event_exists(
+                await db_manager.event_repo.get_by_id(event_id),
+            )
 
             retrieved_event_seats = await db_manager.event_seats_repo.get_event_seats_for_update(event_id, seat_ids)
 
@@ -226,7 +217,7 @@ class CheckoutEventService:
                 reserved_until=booking.reserved_until,
             )
 
-        return booking, retrieved_event_seats
+        return booking, retrieved_event, retrieved_event_seats
 
     async def _update_booking_payment_info(
         self,
@@ -312,7 +303,7 @@ class CheckoutEventService:
                 )
         except asyncio.TimeoutError as payment_timeout_exception:
             raise PaymentAPIConnectorTimeout from payment_timeout_exception
-        except PaymentExternalAPIError as payment_exception:
+        except (PaymentExternalAPIError, HTTPConnectionError) as payment_exception:
             raise PaymentAPIConnectorError from payment_exception
 
         return PaymentQuote(
@@ -342,6 +333,7 @@ class CheckoutEventService:
         except (
             asyncio.TimeoutError,
             ProtectionExternalAPIError,
+            HTTPConnectionError,
         ):
             return None
 
