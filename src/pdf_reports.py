@@ -22,7 +22,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from src.presentation.events.dto import EventDashboard
+from src.presentation.events.dto import EventDashboardResponse
 
 FONT_DIR: Final[Path] = Path(__file__).parent / "assets" / "fonts"
 REGULAR_FONT_PATH: Final[Path] = FONT_DIR / "FiraCode-Regular.ttf"
@@ -52,7 +52,7 @@ class OccupancyBar(Flowable):
 
 
 def generate_event_dashboard_pdf(
-    dashboard: EventDashboard,
+    dashboard: EventDashboardResponse,
     output_path: str | Path,
     generated_at: datetime | None = None,
 ) -> Path:
@@ -295,7 +295,7 @@ def _summary_cards(
 
 
 def _sales_table(
-    dashboard: EventDashboard,
+    dashboard: EventDashboardResponse,
     styles: dict[str, ParagraphStyle],
 ) -> Table:
     sales = dashboard.sales
@@ -310,7 +310,7 @@ def _sales_table(
 
 
 def _occupancy_table(
-    dashboard: EventDashboard,
+    dashboard: EventDashboardResponse,
     styles: dict[str, ParagraphStyle],
 ) -> Table:
     occupancy = dashboard.occupancy
@@ -359,7 +359,7 @@ def _metrics_table(
     return table
 
 
-def _format_money(value: int) -> str:
+def _format_money(value: int | float) -> str:
     return f"{value / 100:,.2f} ₽".replace(",", " ")
 
 

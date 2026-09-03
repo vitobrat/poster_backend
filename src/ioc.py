@@ -10,6 +10,10 @@ from dishka import (
 
 from src.application.checkout.checkout_event import CheckoutEventService
 from src.application.checkout.service import CheckoutService
+from src.application.event.obtain_analytics import (
+    ObtainEventAnalyticsDataService,
+)
+from src.application.event.service import EventService
 from src.configs.config import (
     APIConnectorsConfigs,
     PostgresConfig,
@@ -104,7 +108,25 @@ class APIConnectorProvider(Provider):
         await api_connector.aclose_client()
 
 
-class ServiceProvider(Provider):
+class EventServiceProvider(Provider):
+    @provide(scope=Scope.APP)
+    def get_event_obtain_analytics_service(
+        self,
+        db_client: DatabaseClient,
+    ) -> ObtainEventAnalyticsDataService:
+        return ObtainEventAnalyticsDataService(
+            db_client=db_client,
+        )
+
+    @provide(scope=Scope.APP)
+    def get_event_service(
+        self,
+        obtain_event_analytics_service: ObtainEventAnalyticsDataService,
+    ) -> EventService:
+        return EventService(obtain_event_analytics_service)
+
+
+class CheckoutServiceProvider(Provider):
     @provide(scope=Scope.APP)
     def get_checkout_event_service(
         self,
@@ -131,5 +153,6 @@ def create_container(settings: Settings) -> AsyncContainer:
         ConfigProvider(settings),
         DatabaseProvider(),
         APIConnectorProvider(),
-        ServiceProvider(),
+        CheckoutServiceProvider(),
+        EventServiceProvider(),
     )

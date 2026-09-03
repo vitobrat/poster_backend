@@ -7,8 +7,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from src.application.checkout.checkout_event import CheckoutEventService
+from src.application.checkout.exceptions import PaymentAPIConnectorError
 from src.configs.config import Settings
-from src.domain.checkout.exceptions import CheckoutDomainError
 from src.infrastructure.api_connectors.exceptions import HTTPConnectionError
 from src.infrastructure.api_connectors.external.payment_service.client import (
     PaymentAPIHTTPConnector,
@@ -177,7 +177,7 @@ class CheckoutCompensationTest(unittest.IsolatedAsyncioTestCase):
     ) -> None:
         service = self._build_checkout_service(payment_error=payment_error)
 
-        with self.assertRaises(CheckoutDomainError) as error_context:
+        with self.assertRaises(PaymentAPIConnectorError) as error_context:
             await service.exec(
                 event_id=self._event_id,
                 user_id=101,
@@ -198,7 +198,7 @@ class CheckoutCompensationTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(event_seat.booking_id)
         self.assertIsNone(event_seat.reserved_until)
 
-        self.assertIs(type(error_context.exception), CheckoutDomainError)
+        self.assertIs(type(error_context.exception), PaymentAPIConnectorError)
 
     async def test_expired_booking_is_replaced_by_new_booking(self) -> None:
         expired_at = datetime.now(UTC).replace(tzinfo=None) - timedelta(minutes=1)

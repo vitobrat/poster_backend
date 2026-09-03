@@ -1,11 +1,16 @@
+from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import APIRouter
 
+from src.application.event.service import EventService
 from src.presentation.dependencies import CurrentUserId
 from src.presentation.events.dto import (
     EventCreate,
-    EventDashboard,
+    EventDashboardResponse,
     EventRead,
     EventSeatRead,
+)
+from src.presentation.events.mapper import (
+    map_event_analytics_to_dashboard_response,
 )
 
 router = APIRouter()
@@ -45,11 +50,17 @@ async def create_event(
 
 
 @router.get("/organizer/events/{event_id}/dashboard")
+@inject
 async def get_event_dashboard(
     event_id: int,
     organizer_id: CurrentUserId,
-) -> EventDashboard:
+    event_analytics_service: FromDishka[EventService],
+) -> EventDashboardResponse:
     """Возвращает аналитические данные мероприятия."""
-    # TODO: проверить принадлежность мероприятия organizer_id.
-    # TODO: конкурентно загрузить продажи и занятость разными DB-запросами.
-    raise NotImplementedError
+
+    event_sales_data_result = await event_analytics_service.get_event_analytics_data(
+        event_id=event_id,
+        organizer_id=organizer_id,
+    )
+
+    return map_event_analytics_to_dashboard_response(event_sales_data_result)

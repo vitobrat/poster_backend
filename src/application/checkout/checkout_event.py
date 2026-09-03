@@ -124,8 +124,8 @@ class CheckoutEventService:
                     ),
                     name="calculate_optional_booking_protection_payment",
                 )
-        except* PaymentCalculationError as error:
-            raise CheckoutDomainError from error
+        except* PaymentCalculationError as payment_errors:
+            raise payment_errors.exceptions[0]
 
         payment: PaymentQuote = payment_task.result()
         protection: ProtectionQuote | None = protection_task.result()

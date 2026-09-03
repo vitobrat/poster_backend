@@ -3,6 +3,14 @@ from types import MappingProxyType
 
 from fastapi import status
 
+from src.application.checkout.exceptions import (
+    BookingReservedError,
+    BookingUpdatePaymentError,
+    CheckoutCompensationError,
+    PaymentAPIConnectorError,
+    PaymentAPIConnectorTimeout,
+)
+from src.application.exception import ApplicationError
 from src.domain.checkout.exceptions import (
     DuplicateSeatIdsError,
     EmptySeatIdsError,
@@ -34,6 +42,31 @@ CHECKOUT_DOMAIN_EXCEPTION_RESPONSES: Mapping[type[DomainError], ErrorAPISchema] 
         SeatsNotFoundError: ErrorAPISchema(
             status_code=status.HTTP_404_NOT_FOUND,
             description="Some requested seats were not found for the event",
+        ),
+    },
+)
+
+CHECKOUT_APPLICATION_EXCEPTION_RESPONSES: Mapping[type[ApplicationError], ErrorAPISchema] = MappingProxyType(
+    {
+        PaymentAPIConnectorTimeout: ErrorAPISchema(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            description="Payment API request timed out",
+        ),
+        PaymentAPIConnectorError: ErrorAPISchema(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            description="Failed to connect to payment API",
+        ),
+        BookingReservedError: ErrorAPISchema(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            description="Failed to reserve booking",
+        ),
+        BookingUpdatePaymentError: ErrorAPISchema(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            description="Failed to update payment for booking",
+        ),
+        CheckoutCompensationError: ErrorAPISchema(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            description="Failed to compensate for checkout issue",
         ),
     },
 )

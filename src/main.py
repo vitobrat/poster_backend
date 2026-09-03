@@ -9,7 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.add_event_data import add_event_data_to_db
 from src.configs.config import Settings
 from src.ioc import create_container
-from src.presentation.exceptions import setup_domain_exception_errors
+from src.presentation.exceptions import (
+    setup_application_exception_errors,
+    setup_domain_exception_errors,
+)
 from src.presentation.router import router
 
 
@@ -50,3 +53,4 @@ setup_dishka(
 )
 
 setup_domain_exception_errors(app)
+setup_application_exception_errors(app)

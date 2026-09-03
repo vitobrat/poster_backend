@@ -2,6 +2,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.infrastructure.database.repository.booking import BookingRepo
 from src.infrastructure.database.repository.event import EventRepo
+from src.infrastructure.database.repository.event_analytics import (
+    EventAnalyticsRepo,
+)
 from src.infrastructure.database.repository.event_seats import EventSeatRepo
 
 
@@ -24,3 +27,7 @@ class DatabaseManager:
     @property
     def event_repo(self) -> EventRepo:
         return EventRepo(self._session)
+
+    @property
+    def event_analytics_repo(self) -> EventAnalyticsRepo:
+        return EventAnalyticsRepo(self._session)
