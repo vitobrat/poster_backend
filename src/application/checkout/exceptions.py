@@ -1,4 +1,7 @@
-class PaymentCalculationError(Exception):
+from src.application.exception import ApplicationError
+
+
+class PaymentCalculationError(ApplicationError):
     """Ошибка расчета платежа"""
 
 
@@ -10,7 +13,7 @@ class PaymentAPIConnectorTimeout(PaymentAPIConnectorError):
     """Превышено время ожидания сервиса платежей"""
 
 
-class BookingDBError(Exception):
+class BookingDBError(ApplicationError):
     """Ошибка при взаимодействии с таблицей Booking в базе данных"""
 
 
@@ -22,5 +25,5 @@ class BookingUpdatePaymentError(BookingDBError):
     """Ошибка при обновлении стоимости бронирования"""
 
 
-class CheckoutCompensationError(Exception):
+class CheckoutCompensationError(ApplicationError):
     """Ошибка возникла при выполнении компенсации бронирования (откате брони мест)"""

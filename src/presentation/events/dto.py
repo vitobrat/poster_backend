@@ -48,7 +48,7 @@ class SalesDashboard(BaseModel):
     paid_orders: int
     sold_tickets: int
     revenue: int
-    average_order: int
+    average_order: float
 
 
 class OccupancyDashboard(BaseModel):
@@ -59,7 +59,7 @@ class OccupancyDashboard(BaseModel):
     occupancy_percent: float
 
 
-class EventDashboard(BaseModel):
+class EventDashboardResponse(BaseModel):
     event_title: str
     starts_at: datetime
     sales: SalesDashboard
