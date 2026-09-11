@@ -1,11 +1,19 @@
 from src.domain.exceptions import DomainError
 
 
-class AnalyticsDomainError(DomainError):
-    """Базовая ошибка аналитики."""
+class EventDomainError(DomainError):
+    """Базовая ошибка мероприятия"""
 
 
-class EventAnalyticsNotFoundError(AnalyticsDomainError):
+class EventAnalyticsError(EventDomainError):
+    """Базовая ошибка аналитики мероприятия."""
+
+
+class EventDataNotFoundError(EventDomainError):
+    """Данные по мероприятию не найдены"""
+
+
+class EventAnalyticsNotFoundError(EventAnalyticsError):
     """Аналитические данные по мероприятию не найдены."""
 
 

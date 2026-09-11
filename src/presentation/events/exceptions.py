@@ -3,9 +3,16 @@ from types import MappingProxyType
 
 from fastapi import status
 
-from src.application.event.exceptions import EventAnalyticsError
+from src.application.event.exceptions import (
+    EventAnalyticsError,
+    EventLockTimeoutError,
+    ReadEventError,
+)
 from src.application.exception import ApplicationError
-from src.domain.event.exceptions import EventAnalyticsNotFoundError
+from src.domain.event.exceptions import (
+    EventAnalyticsNotFoundError,
+    EventDataNotFoundError,
+)
 from src.domain.exceptions import DomainError
 from src.presentation.schema import ErrorAPISchema
 
@@ -15,6 +22,10 @@ EVENT_DOMAIN_EXCEPTION_RESPONSES: Mapping[type[DomainError], ErrorAPISchema] = M
             status_code=status.HTTP_404_NOT_FOUND,
             description="Аналитические данные по мероприятию не найдены.",
         ),
+        EventDataNotFoundError: ErrorAPISchema(
+            status_code=status.HTTP_404_NOT_FOUND,
+            description="Данные по мероприятию не найдены",
+        ),
     },
 )
 
@@ -23,7 +34,15 @@ EVENT_APPLICATION_EXCEPTION_RESPONSES: Mapping[type[ApplicationError], ErrorAPIS
     {
         EventAnalyticsError: ErrorAPISchema(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            description="Ошибка получения аналитических данных мероприятия.",
+            description="Ошибка получения аналитических данных мероприятия из базы.",
+        ),
+        ReadEventError: ErrorAPISchema(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            description="Ошибка получения данных мероприятия из базы",
+        ),
+        EventLockTimeoutError: ErrorAPISchema(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            description="Истечение времени ожидания получения данных, повторите попытку",
         ),
     },
 )

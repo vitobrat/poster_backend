@@ -17,7 +17,7 @@ class EventCreate(BaseModel):
     base_price: int = Field(gt=0)
 
 
-class EventRead(BaseModel):
+class EventReadResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
     organizer_id: int

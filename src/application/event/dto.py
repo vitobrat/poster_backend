@@ -2,6 +2,19 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
+from pydantic import BaseModel, Field
+
+
+class EventData(BaseModel):
+    id: int = Field(..., description="ID мероприятия")
+    organizer_id: int = Field(..., description="ID организатора")
+    location_id: int = Field(..., description="ID локации")
+    title: str = Field(..., description="Название мероприятия")
+    description: str | None = Field(default=None, description="Описание мероприятия")
+    category: str = Field(..., description="Категория мероприятия")
+    starts_at: datetime = Field(..., description="Дата и время начала мероприятия")
+    base_price: int = Field(..., description="Базовая цена билета на мероприятие")
+
 
 @dataclass(frozen=True, slots=True)
 class EventAnalyticsResult:

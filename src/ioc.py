@@ -7,12 +7,14 @@ from dishka import (
     make_async_container,
     provide,
 )
+from redis.asyncio import Redis
 
 from src.application.checkout.checkout_event import CheckoutEventService
 from src.application.checkout.service import CheckoutService
 from src.application.event.obtain_analytics import (
     ObtainEventAnalyticsDataService,
 )
+from src.application.event.obtain_event import ObtainEventService
 from src.application.event.service import EventService
 from src.configs.config import (
     APIConnectorsConfigs,
@@ -28,8 +30,12 @@ from src.infrastructure.api_connectors.external.protection_service.client import
     ProtectionAPIHTTPConnector,
 )
 from src.infrastructure.api_connectors.schemas import HttpRateLimit
+from src.infrastructure.concurrency.single_flight import SingleFlight
 from src.infrastructure.database.base_client import DatabaseClient
 from src.infrastructure.postgres.client import PostgresClient
+from src.infrastructure.redis.event_cache import EventCache
+from src.infrastructure.redis.event_lock import EventLock
+from src.infrastructure.redis.redis_manger import RedisManager
 
 
 class ConfigProvider(Provider):
@@ -67,6 +73,45 @@ class DatabaseProvider(Provider):
         db_client = PostgresClient(config)
         yield db_client
         await db_client.aclose()
+
+
+class RedisProvider(Provider):
+    @provide(scope=Scope.APP)
+    async def get_redis_manager(self, config: RedisConfig) -> AsyncIterator[RedisManager]:
+        redis_client = Redis.from_url(
+            config.url,
+            decode_responses=True,
+        )
+        redis_manager = RedisManager(redis_client)
+        yield redis_manager
+        await redis_manager.aclose()
+
+
+class SingleFlightProvider(Provider):
+
+    @provide(scope=Scope.APP)
+    def get_singleflight(self) -> SingleFlight:
+        return SingleFlight()
+
+
+class CacheProvider(Provider):
+
+    @provide(scope=Scope.APP)
+    def get_event_cache(
+        self,
+        redis: RedisManager,
+    ) -> EventCache:
+        return EventCache(redis)
+
+
+class LockProvider(Provider):
+
+    @provide(scope=Scope.APP)
+    def get_event_lock(
+        self,
+        redis: RedisManager,
+    ) -> EventLock:
+        return EventLock(redis)
 
 
 class APIConnectorProvider(Provider):
@@ -119,11 +164,27 @@ class EventServiceProvider(Provider):
         )
 
     @provide(scope=Scope.APP)
+    def get_event_single_flight_service(
+        self,
+        db_client: DatabaseClient,
+        single_flight: SingleFlight,
+        event_cache_manager: EventCache,
+        event_lock_manager: EventLock,
+    ) -> ObtainEventService:
+        return ObtainEventService(
+            db_client=db_client,
+            single_flight=single_flight,
+            event_cache_manager=event_cache_manager,
+            event_lock_manager=event_lock_manager,
+        )
+
+    @provide(scope=Scope.APP)
     def get_event_service(
         self,
         obtain_event_analytics_service: ObtainEventAnalyticsDataService,
+        obtain_event_single_flight_service: ObtainEventService,
     ) -> EventService:
-        return EventService(obtain_event_analytics_service)
+        return EventService(obtain_event_analytics_service, obtain_event_single_flight_service)
 
 
 class CheckoutServiceProvider(Provider):
@@ -155,4 +216,8 @@ def create_container(settings: Settings) -> AsyncContainer:
         APIConnectorProvider(),
         CheckoutServiceProvider(),
         EventServiceProvider(),
+        LockProvider(),
+        CacheProvider(),
+        SingleFlightProvider(),
+        RedisProvider(),
     )

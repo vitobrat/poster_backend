@@ -6,7 +6,7 @@ from src.presentation.dependencies import CurrentUserId
 from src.presentation.events.dto import (
     EventCreate,
     EventDashboardResponse,
-    EventRead,
+    EventReadResponse,
     EventSeatRead,
 )
 from src.presentation.events.mapper import (
@@ -17,15 +17,31 @@ router = APIRouter()
 
 
 @router.get("/events")
-async def list_events() -> list[EventRead]:
+async def list_events() -> list[EventReadResponse]:
     """Возвращает список мероприятий для клиента."""
     raise NotImplementedError
 
 
 @router.get("/events/{event_id}")
-async def get_event(event_id: int) -> EventRead:
+@inject
+async def get_event(
+    event_id: int,
+    event_service: FromDishka[EventService],
+) -> EventReadResponse:
     """Возвращает описание мероприятия."""
-    raise NotImplementedError
+
+    event_data = await event_service.get_event_data(event_id)
+
+    return EventReadResponse(
+        id=event_data.id,
+        organizer_id=event_data.organizer_id,
+        location_id=event_data.location_id,
+        title=event_data.title,
+        description=event_data.description,
+        category=event_data.category,
+        starts_at=event_data.starts_at,
+        base_price=event_data.base_price,
+    )
 
 
 @router.get("/events/{event_id}/seats")
@@ -35,7 +51,7 @@ async def list_event_seats(event_id: int) -> list[EventSeatRead]:
 
 
 @router.get("/organizer/events")
-async def list_organizer_events(organizer_id: CurrentUserId) -> list[EventRead]:
+async def list_organizer_events(organizer_id: CurrentUserId) -> list[EventReadResponse]:
     """Возвращает список созданных событий текущего организатора."""
     raise NotImplementedError
 
@@ -44,7 +60,7 @@ async def list_organizer_events(organizer_id: CurrentUserId) -> list[EventRead]:
 async def create_event(
     payload: EventCreate,
     organizer_id: CurrentUserId,
-) -> EventRead:
+) -> EventReadResponse:
     """Создаёт мероприятие от лица текущего организатора."""
     raise NotImplementedError
 
@@ -54,11 +70,11 @@ async def create_event(
 async def get_event_dashboard(
     event_id: int,
     organizer_id: CurrentUserId,
-    event_analytics_service: FromDishka[EventService],
+    event_service: FromDishka[EventService],
 ) -> EventDashboardResponse:
     """Возвращает аналитические данные мероприятия."""
 
-    event_sales_data_result = await event_analytics_service.get_event_analytics_data(
+    event_sales_data_result = await event_service.get_event_analytics_data(
         event_id=event_id,
         organizer_id=organizer_id,
     )
